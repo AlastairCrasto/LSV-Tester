@@ -1,8 +1,6 @@
 #include <Arduino.h>
 #include "functions.h"
 
-// Git check
-
 int springCylinder = 51;
 int spindleCylinder = 53;
 int cylinderButton = 45;

@@ -35,15 +35,13 @@ float postPressure = 0;
 float error = 0;
 
 // LED functionality
-int TESTING = 9;  // Testing phase LED
-int FAIL = 11;    // Red LED
-int PASS = 10;    // Green LED
-
+int TESTING = 9; // Testing phase LED
+int FAIL = 11;   // Red LED
+int PASS = 10;   // Green LED
 
 // input and output solenoids
 int inputRelay = 49;
 int outputRelay = 47;
-
 
 bool spindleCheck = false;
 bool springCheck = false;
@@ -61,9 +59,24 @@ bool springChecking = false;
 bool fail = false;
 bool pass = true;
 
+// Variables for testing limits
+
+int inOutDiff = 250;
+int setLimit = 30;
+int shutOffLimit = 40;
+int preShutOff = 50;
+int decayLimit = 50;
+int holdingLimit = 20;
+int creepLimit = 15;
+int pulse = 3;
+int pulseLimit = 20;
+int checkpoints = 6;
+
 // the reset function resets all of the variables used in the loop function after a pass or fail test to carry out testing for the next valve
-void reset(bool status) {
-  if (status == true) {
+void reset(bool status)
+{
+  if (status == true)
+  {
     Serial.println("Testing Complete ---> Valve passed all tests");
     digitalWrite(FAIL, LOW);
     digitalWrite(PASS, HIGH);
@@ -74,11 +87,13 @@ void reset(bool status) {
     digitalWrite(outputRelay, HIGH);
     delay(600);
     digitalWrite(outputRelay, LOW);
-    pressureSetCheck = false;  
-    spindleCheck = false;  
-    springCheck = false;   
-    startProgram = false;  
-  } else if (status == false) {
+    pressureSetCheck = false;
+    spindleCheck = false;
+    springCheck = false;
+    startProgram = false;
+  }
+  else if (status == false)
+  {
     digitalWrite(FAIL, HIGH);
     digitalWrite(PASS, LOW);
     digitalWrite(TESTING, LOW);
@@ -95,7 +110,8 @@ void reset(bool status) {
   }
 }
 
-void setup() {
+void setup()
+{
   Serial.begin(9600);
 
   pinMode(springCylinder, OUTPUT);
@@ -104,8 +120,8 @@ void setup() {
   pinMode(spindleButton, INPUT);
   pinMode(startButton, INPUT);
   pinMode(spindleLeakButton, INPUT);
-  //pinMode(spindleUpButton, INPUT);
-  //pinMode(spindleDownButton, INPUT);
+  // pinMode(spindleUpButton, INPUT);
+  // pinMode(spindleDownButton, INPUT);
 
   pinMode(big_stepPin, OUTPUT);
   pinMode(big_dirPin, OUTPUT);
@@ -126,65 +142,74 @@ void setup() {
   digitalWrite(spindleCylinder, HIGH);
 }
 
-void loop() {
-
+void loop()
+{
 
   cylinderButtonState = digitalRead(cylinderButton);
   spindleButtonState = digitalRead(spindleButton);
   startButtonState = digitalRead(startButton);
 
-
-  if (cylinderButtonState == HIGH) {                    // if HIGH, spring housing driver is lowered
+  if (cylinderButtonState == HIGH)
+  { // if HIGH, spring housing driver is lowered
     springState = !springState;
     digitalWrite(springCylinder, springState);
-    if (springState == false) {
+    if (springState == false)
+    {
       springCheck = true;
     }
     delay(500);
   }
 
-  if (spindleButtonState == HIGH) {                     // if HIGH, spindle driver is lowered
+  if (spindleButtonState == HIGH)
+  { // if HIGH, spindle driver is lowered
     spindleState = !spindleState;
     digitalWrite(spindleCylinder, spindleState);
-    if (spindleState == false) {
+    if (spindleState == false)
+    {
       spindleCheck = true;
     }
     delay(500);
   }
 
-  if (springCheck == true && spindleCheck == true && startButtonState == HIGH) {          // Testing only begins once both drivers are lowered and start button is clicked
+  if (springCheck == true && spindleCheck == true && startButtonState == HIGH)
+  { // Testing only begins once both drivers are lowered and start button is clicked
     startProgram = true;
     digitalWrite(PASS, LOW);
     digitalWrite(FAIL, LOW);
   }
 
-  if (startProgram == true) {
+  if (startProgram == true)
+  {
     Serial.println("Entered main program function");
 
     digitalWrite(inputRelay, HIGH);
     digitalWrite(outputRelay, HIGH);
     delay(500);
 
-    digitalWrite(TESTING, HIGH);                                                          
-    shutOffCheck = shutOffFunction(small_dirPin,small_stepPin,inputRelay,outputRelay);    // Tests shut off functionality 
+    digitalWrite(TESTING, HIGH);
+    shutOffCheck = shutOffFunction(small_dirPin, small_stepPin, inputRelay, outputRelay,shutOffLimit,preShutOff); // Tests shut off functionality
     digitalWrite(TESTING, LOW);
 
-    if (shutOffCheck == true) {
+    if (shutOffCheck == true)
+    {
       digitalWrite(PASS, HIGH);
-    } else if (shutOffCheck == false) {
+    }
+    else if (shutOffCheck == false)
+    {
       digitalWrite(fail, HIGH);
     }
 
-    if (shutOffCheck == true) {
+    if (shutOffCheck == true)
+    {
 
       digitalWrite(TESTING, HIGH);
-      spindleLeak = spindleReversal(small_dirPin,small_stepPin,inputRelay,outputRelay,spindleButton,cylinderButton,spindleLeakButton,startButton);   // operators to test for leaks
+      spindleLeak = spindleReversal(small_dirPin, small_stepPin, inputRelay, outputRelay, spindleButton, cylinderButton, spindleLeakButton, startButton,checkpoints); // operators to test for leaks
       digitalWrite(TESTING, LOW);
       digitalWrite(inputRelay, LOW);
       digitalWrite(outputRelay, HIGH);
 
-
-      if (spindleLeak == true) {            // operator passes the valve after observing no leaks
+      if (spindleLeak == true)
+      { // operator passes the valve after observing no leaks
         pressure = inletPressureSensor();
         Serial.print("Current inlet pressure : ");
         Serial.println(pressure);
@@ -193,30 +218,37 @@ void loop() {
         Serial.println(postPressure);
 
         // This test is to ensure that the spring housing is not faulty allowing the mains pressure to go through it with no restriction
-        if (abs(pressure - postPressure) > 250) {
+        if (abs(pressure - postPressure) > inOutDiff)
+        {
           Serial.println("Test 1 : Output pressure much lower than input pressure ----> pressure is held");
           springPressureCheck = true;
-        } else {
+        }
+        else
+        {
           Serial.println("Test 1 : Output pressure similar to the input pressure ----> pressure is not held");
         }
 
-        springChecking = springPressureHold(big_dirPin,big_stepPin,inputRelay,outputRelay);       //checking if winding the spring causes expected changes to output pressure
+        springChecking = springPressureHold(big_dirPin, big_stepPin, inputRelay, outputRelay, holdingLimit); // checking if winding the spring causes expected changes to output pressure
 
         digitalWrite(TESTING, HIGH);
-        pressureHold = pressureDecay(inputRelay,outputRelay);               // secondary check to capture any leaks in the system
+        pressureHold = pressureDecay(inputRelay, outputRelay,decayLimit); // secondary check to capture any leaks in the system
         digitalWrite(TESTING, LOW);
 
-        if (pressureHold == true) {
+        if (pressureHold == true)
+        {
           digitalWrite(PASS, HIGH);
-        } else {
+        }
+        else
+        {
           digitalWrite(FAIL, HIGH);
         }
 
-
-        if (pressureHold == true && springPressureCheck == true && springChecking == true) {   //only if all the previous tests are passed, the output pressure is adjusted to the setpoint
+        if (pressureHold == true && springPressureCheck == true && springChecking == true)
+        { // only if all the previous tests are passed, the output pressure is adjusted to the setpoint
           Serial.println("Successfully holding pressure");
 
-          while (pressureSetCheck == false) {
+          while (pressureSetCheck == false)
+          {
             digitalWrite(inputRelay, HIGH);
             digitalWrite(outputRelay, LOW);
 
@@ -229,12 +261,15 @@ void loop() {
             Serial.print(pressure);
             Serial.println("  ");
 
-            if ((abs(pressure - setpoint)) < 30) {           // Tolerance of 30kPa +/- of the setpoint   
+            if ((abs(pressure - setpoint)) < setLimit)
+            { // Tolerance of 30kPa +/- of the setpoint
               pressureSetCheck = true;
               Serial.println("Set pressure Achieved");
-            } else {
+            }
+            else
+            {
               error = pressure - setpoint;
-              pressureAdjustment(error,big_dirPin,big_stepPin,inputRelay,outputRelay,setpoint);
+              pressureAdjustment(error, big_dirPin, big_stepPin, inputRelay, outputRelay, setpoint);
             }
             delay(10);
           }
@@ -245,7 +280,7 @@ void loop() {
           pressure = pressureSensor();
           Serial.print("Pressure test for the pulsing : ");
           Serial.println(pressure);
-          secondPulseCheck = secondPulse(pressure,inputRelay,outputRelay);     // pulsing test to check if pressure sticks to the setpoint    
+          secondPulseCheck = pulsingCheck(pressure, inputRelay, outputRelay,pulse,pulseLimit); // pulsing test to check if pressure sticks to the setpoint
 
           digitalWrite(inputRelay, HIGH);
           digitalWrite(outputRelay, LOW);
@@ -254,36 +289,47 @@ void loop() {
           Serial.print("Checking for pressure creep after setting the pressure. Pressure set to ");
           Serial.println(pressure);
           digitalWrite(TESTING, HIGH);
-          springPressureCheck = springPressure(pressure);           // check for pressure creep on the output after pressure setting
+          springPressureCheck = springPressure(pressure,creepLimit); // check for pressure creep on the output after pressure setting
           digitalWrite(TESTING, LOW);
 
-          if (springPressureCheck == false) {
+          if (springPressureCheck == false)
+          {
             digitalWrite(FAIL, HIGH);
-          } else {
+          }
+          else
+          {
             digitalWrite(PASS, HIGH);
           }
 
-          if (secondPulseCheck == true && springPressureCheck == true) {
+          if (secondPulseCheck == true && springPressureCheck == true)
+          {
             Serial.print("Pressure holding at setpoint of ");
             Serial.println(setpoint);
 
-            reset(pass);          // All tests are complete and the valve is good to go
-
-          } else {
-            Serial.println("Pulsing failed or pressure not holding to the setpoint");
-            reset(fail);          // Valve failed pulsing test
+            reset(pass); // All tests are complete and the valve is good to go
           }
-        } else {
-          Serial.println("Spring issue, pressure on the output not valid");
-          reset(fail);            // Valve failed due to faulty spring housing
+          else
+          {
+            Serial.println("Pulsing failed or pressure not holding to the setpoint");
+            reset(fail); // Valve failed pulsing test
+          }
         }
-      } else {
-        Serial.println("Leak from the spindle based on operators observation");
-        reset(fail);              // Valve failed due to leak observed by the operator
+        else
+        {
+          Serial.println("Spring issue, pressure on the output not valid");
+          reset(fail); // Valve failed due to faulty spring housing
+        }
       }
-    } else {
+      else
+      {
+        Serial.println("Leak from the spindle based on operators observation");
+        reset(fail); // Valve failed due to leak observed by the operator
+      }
+    }
+    else
+    {
       Serial.println("Shut off failed");
-      reset(fail);                // Shut off function failed
+      reset(fail); // Shut off function failed
     }
   }
 }

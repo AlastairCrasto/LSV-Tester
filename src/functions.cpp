@@ -66,7 +66,7 @@ void pressureAdjustment(float errorValue,int springDirPin,int springStepPin,int 
   Serial.println("Exiting adjustment --> back to loop function");
 }
 
-bool shutOffFunction(int spindleDirPin,int spindleStepPin,int input, int output) {
+bool shutOffFunction(int spindleDirPin,int spindleStepPin,int input, int output, int shutLimit, int preShutLimit) {
 
   bool coarse_tighten = true;
 
@@ -108,7 +108,7 @@ bool shutOffFunction(int spindleDirPin,int spindleStepPin,int input, int output)
   Serial.print("Difference : ");
   Serial.println(abs(preSample - postSample));
 
-  if (abs(preSample - postSample) >= 40 || preSample > 50) {
+  if (abs(preSample - postSample) >= shutLimit || preSample > preShutLimit) {
     Serial.println("Pressure leaked after shut off ---> shut off failed");
     return false;
   } else {
@@ -117,7 +117,7 @@ bool shutOffFunction(int spindleDirPin,int spindleStepPin,int input, int output)
   }
 }
 
-bool pressureDecay(int input, int output) {
+bool pressureDecay(int input, int output,int decayLim) {
   float pressureTest = 0;
   float nextSample = 0;
 
@@ -142,14 +142,14 @@ bool pressureDecay(int input, int output) {
   Serial.print("Pressure decay: ");
   Serial.println(abs(nextSample - pressureTest));
 
-  if (abs(nextSample - pressureTest) > 50) {              // Any leaks above 50 are termed as leaks through the valve 
+  if (abs(nextSample - pressureTest) > decayLim) {              // Any leaks above 50 are termed as leaks through the valve 
     return false;
   } else {
     return true;
   }
 }
 
-bool springPressureHold(int springDirPin,int springStepPin,int input,int output) {
+bool springPressureHold(int springDirPin,int springStepPin,int input,int output, int holdingLim) {
   float preSample = 0;
   float postSample = 0;
 
@@ -174,7 +174,7 @@ bool springPressureHold(int springDirPin,int springStepPin,int input,int output)
   Serial.print("Pressure after pressure is adjusted : ");
   Serial.println(postSample);
 
-  if (abs(preSample - postSample) < 20) {
+  if (abs(preSample - postSample) < holdingLim) {
     Serial.println("Test 2 : No pressure change noticed ---> pressure is not holding");
     return false;
   } else {
@@ -183,7 +183,7 @@ bool springPressureHold(int springDirPin,int springStepPin,int input,int output)
   }
 }
 
-bool springPressure(float pressureSetpoint) {
+bool springPressure(float pressureSetpoint, int creepLim) {
   float postSample = 0;
 
   Serial.print("Pressure before delay to check for creep : ");
@@ -194,14 +194,14 @@ bool springPressure(float pressureSetpoint) {
   Serial.print("Pressure after delay to check for creep : ");
   Serial.println(postSample);
 
-  if (abs(pressureSetpoint - postSample) > 15) {                    
+  if (abs(pressureSetpoint - postSample) > creepLim) {                    
     return false;
   } else {
     return true;
   }
 }
 
-bool secondPulse(float currentPressure,int input,int output) {
+bool pulsingCheck(float currentPressure,int input,int output,int pulseValue, int pulseLim) {
 
   digitalWrite(input, HIGH);
 
@@ -209,7 +209,7 @@ bool secondPulse(float currentPressure,int input,int output) {
   float newPressure = 0;
   bool holdingPressure = true;
 
-  while (pulseNumber < 3) {                                       // three total pulses in the whole operation
+  while (pulseNumber < pulseValue) {                                       // three total pulses in the whole operation
     digitalWrite(output, LOW);
     delay(1500);
     newPressure = pressureSensor();
@@ -217,7 +217,7 @@ bool secondPulse(float currentPressure,int input,int output) {
     Serial.print(pulseNumber + 1);
     Serial.print(" pulse : ");
     Serial.println(newPressure);
-    if (abs(currentPressure - newPressure) >= 20) {               // if the pressure after a pulse is greater than 20. valve fails the pulse test
+    if (abs(currentPressure - newPressure) >= pulseLim) {               // if the pressure after a pulse is greater than 20. valve fails the pulse test
       holdingPressure = false;
       Serial.println("Pulsing failed");
       return holdingPressure;                                     // valve has passed the current leg of the pulsing operation
@@ -230,7 +230,7 @@ bool secondPulse(float currentPressure,int input,int output) {
   return holdingPressure;
 }
 
-bool spindleReversal(int spindleDirPin,int spindleStepPin,int input, int output,int spindleUpButton, int spindleDownButton, int spindlePassButton, int spindleFailButton) {
+bool spindleReversal(int spindleDirPin,int spindleStepPin,int input, int output,int spindleUpButton, int spindleDownButton, int spindlePassButton, int spindleFailButton,int checkValue) {
 
   int upCount = 0;
 
@@ -287,7 +287,7 @@ bool spindleReversal(int spindleDirPin,int spindleStepPin,int input, int output,
       return false;
     }
 
-    if (upCount >= 6) {
+    if (upCount >= checkValue) {
       if (spindlePass == HIGH) {                               // operator must check atleast 6 locations of unwinding before they can try pass the valve
         return true;
       }

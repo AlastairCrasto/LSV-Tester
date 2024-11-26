@@ -4,19 +4,19 @@
 float pressureSensor()
 {
   int pressure = 0;
-  float sensorValue = analogRead(A0); // reading analogue value at pin A0
+ //float sensorValue = analogRead(A4); // reading analogue value at pin A0
 
-  pressure = 1.1843 * sensorValue - 2.5289; // Linear relationship between the analog values and output pressure
-  int divisible = 50;
-  if (pressure % divisible < 5 || pressure > 480)
-  {
-    int val = map(pressure, 0, 1023, 0, 375);
-    Serial.print("z0.val=");
-    Serial.print(val);
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.write(0xff);
+ // pressure = 1.1843 * sensorValue - 2.5289; // Linear relationship between the analog values and output pressure
+  float sum = 0;
+  
+  for(int i = 0; i<10 ; i++){
+    float sensorValue = analogRead(A4);
+    float calibratedValue = 0.9578*sensorValue - 1.0058;
+    sum += calibratedValue;
   }
+   
+   float avg = sum/10;
+  pressure = avg;
 
   if (pressure < 6)
   { // too low of a pressure to capture - assuming 0 due to conversion error
@@ -32,10 +32,21 @@ float inletPressureSensor()
 {
   float pressureSend = 0;
 
-  float sensorValue = analogRead(A1);
-  pressureSend = sensorValue;
+  //float sensorValue = analogRead(A5);
+  //pressureSend = sensorValue;
+  float sum = 0;
 
-  if (sensorValue < 1)
+  for(int i= 0 ; i<10 ; i++){
+    float sensorValue = analogRead(A5);
+    float calibratedValue = 0.97*sensorValue -3.5531;
+    sum += calibratedValue;
+  }
+
+  float average = sum/10;
+
+  pressureSend = average;
+
+  if (pressureSend < 6)
   { // too low of a pressure to capture - assuming 0 due to conversion error
     return 0;
   }
@@ -90,49 +101,46 @@ void pressureAdjustment(float errorValue, int springDirPin, int springStepPin, i
   Serial.println("Exiting adjustment --> back to loop function");
 }
 
-bool shutOffFunction(int spindleDirPin, int spindleStepPin, int input, int output, int shutLimit, int preShutLimit)
+bool shutOffFunction(int spindleForward, int spindleReverse, int input, int output, int shutLimit, int preShutLimit)
 {
 
   bool coarse_tighten = true;
 
-  Serial.print("t2.pco=63015");
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.print("t2.txt=\"Spindle driver in action\"");
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.write(0xff);
+  Serial3.print("t2.pco=63015");
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.print("t2.txt=\"Spindle driver in action\"");
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.write(0xff);
 
   if (coarse_tighten == true)
   {
-    digitalWrite(spindleDirPin, HIGH);
-    digitalWrite(input, LOW);
+    
+    //digitalWrite(spindleDirPin, HIGH);
     digitalWrite(output, HIGH);
-    delay(600);
-    for (int j = 0; j < 9; j++)
-    { // driver winds the spindle down. Value of 9 based on multiple tests to see number of rotations needed to complete shut off
-      for (int i = 0; i <= 400; i++)
-      {
-        digitalWrite(spindleStepPin, HIGH);
-        delayMicroseconds(500);
-        digitalWrite(spindleStepPin, LOW);
-        delayMicroseconds(500);
-      }
-    }
+    delay(500);
+    digitalWrite(input, LOW);
+    delay(500);
+
+    digitalWrite(spindleForward,HIGH);
+    delay(1500);
+    digitalWrite(spindleForward,LOW);
+
     Serial.println("Coarse tightening completed");
     coarse_tighten = false;
   }
 
   // The following code tests the functionality of the spindle to check for any pressure creep despite shut off
-  Serial.print("t2.pco=63015");
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.print("t2.txt=\"Testing shut off functionality\"");
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.write(0xff);
+  Serial3.print("t2.pco=63015");
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.print("t2.txt=\"Testing shut off functionality\"");
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.write(0xff);
 
   digitalWrite(input, HIGH);
   digitalWrite(output, LOW);
@@ -146,7 +154,7 @@ bool shutOffFunction(int spindleDirPin, int spindleStepPin, int input, int outpu
   Serial.println(preSample);
 
   Serial.println("Checking for pressure creep after shut off");
-  delay(10000);
+  delay(8000);
   Serial.print("The outlet pressure after shut off (post) : ");
   postSample = pressureSensor();
   Serial.println(postSample);
@@ -156,27 +164,27 @@ bool shutOffFunction(int spindleDirPin, int spindleStepPin, int input, int outpu
   if (abs(preSample - postSample) >= shutLimit || preSample > preShutLimit)
   {
     // Serial.println("Pressure leaked after shut off ---> shut off failed");
-    Serial.print("t2.pco=63488");
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.print("t2.txt=\"Shut off test failed\"");
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.write(0xff);
+    Serial3.print("t2.pco=63488");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.print("t2.txt=\"Shut off test failed\"");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
     return false;
   }
   else
   {
     // Serial.println("Pressure not leaking after shut off ---> shut off passed");
-    Serial.print("t2.pco=12000");
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.print("t2.txt=\"Shut off test passed\"");
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.write(0xff);
+    Serial3.print("t2.pco=12000");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.print("t2.txt=\"Shut off test passed\"");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
     return true;
   }
 }
@@ -186,14 +194,14 @@ bool pressureDecay(int input, int output, int decayLim)
   float pressureTest = 0;
   float nextSample = 0;
 
-  Serial.print("t2.pco=63015");
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.print("t2.txt=\"Testing for leaks\"");
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.write(0xff);
+  Serial3.print("t2.pco=63015");
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.print("t2.txt=\"Testing for leaks\"");
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.write(0xff);
 
   digitalWrite(input, HIGH);
   digitalWrite(output, LOW);
@@ -268,18 +276,18 @@ bool springPressure(float pressureSetpoint, int creepLim)
 {
   float postSample = 0;
 
-  Serial.print("t2.pco=63015");
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.print("t2.txt=\"Testing pressure creep\"");
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.write(0xff);
+  Serial3.print("t2.pco=63015");
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.print("t2.txt=\"Testing pressure creep\"");
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.write(0xff);
 
   Serial.print("Pressure before delay to check for creep : ");
   Serial.println(pressureSetpoint); // pressureSetpoint variable is the mark at which the spring housing was set to
-  delay(15000);
+  delay(10000);
 
   postSample = pressureSensor(); // postSample is to check for any pressure creep once the output pressure has been set
   Serial.print("Pressure after delay to check for creep : ");
@@ -287,26 +295,26 @@ bool springPressure(float pressureSetpoint, int creepLim)
 
   if (abs(pressureSetpoint - postSample) > creepLim)
   {
-    Serial.print("t2.pco=63488");
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.print("t2.txt=\"Pressure creep detected\"");
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.write(0xff);
+    Serial3.print("t2.pco=63488");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.print("t2.txt=\"Pressure creep detected\"");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
     return false;
   }
   else
   {
-    Serial.print("t2.pco=12000");
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.print("t2.txt=\"Pressure is holding\"");
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.write(0xff);
+    Serial3.print("t2.pco=12000");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.print("t2.txt=\"Pressure is holding\"");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
     return true;
   }
 }
@@ -334,14 +342,14 @@ bool pulsingCheck(float currentPressure, int input, int output, int pulseValue, 
       holdingPressure = false;
       // Serial.println("Pulsing failed");
 
-      Serial.print("t2.pco=63488");
-      Serial.write(0xff);
-      Serial.write(0xff);
-      Serial.write(0xff);
-      Serial.print("t2.txt=\"Pulsing failed\"");
-      Serial.write(0xff);
-      Serial.write(0xff);
-      Serial.write(0xff);
+      Serial3.print("t2.pco=63488");
+      Serial3.write(0xff);
+      Serial3.write(0xff);
+      Serial3.write(0xff);
+      Serial3.print("t2.txt=\"Pulsing failed\"");
+      Serial3.write(0xff);
+      Serial3.write(0xff);
+      Serial3.write(0xff);
 
       return holdingPressure; // valve has passed the current leg of the pulsing operation
     }
@@ -349,113 +357,81 @@ bool pulsingCheck(float currentPressure, int input, int output, int pulseValue, 
     delay(500);
     pulseNumber += 1;
   }
-  Serial.println("Pulsing passed");
-  Serial.print("t2.pco=12000");
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.print("t2.txt=\"Pulsing passed\"");
-  Serial.write(0xff);
-  Serial.write(0xff);
-  Serial.write(0xff);
+  Serial3.println("Pulsing passed");
+  Serial3.print("t2.pco=12000");
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.print("t2.txt=\"Pulsing passed\"");
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.write(0xff);
 
   return holdingPressure;
 }
 
-bool spindleReversal(int spindleDirPin, int spindleStepPin, int input, int output, int spindleUpButton, int spindleDownButton, int spindlePassButton, int spindleFailButton, int checkValue)
+bool spindleReversal(int spindleForward, int spindleReverse, int spindle, int catridge, int input, int output, int submerge)
 {
 
-  int upCount = 0;
-
-  /*
-  Serial.println("Loosening for leak test");
-  digitalWrite(spindleDirPin, LOW);
-  for (int i = 0; i <= 400; i++) {
-    digitalWrite(spindleStepPin, HIGH);
-    delayMicroseconds(500);
-    digitalWrite(spindleStepPin, LOW);
-    delayMicroseconds(500);
-  }
-  */
+ // int upCount = 0;
 
   digitalWrite(input, HIGH);
   digitalWrite(output, LOW);
 
   bool spindleLeakState = false;
-  /*
-  while (spindleLeakState == false) {                           // operations stay within this loop until operator is not satisfied with the leak test
-
-    // buttons to control the wind/unwind of the spindle and pass/fail
-    bool spindleUpState = digitalRead(spindleUpButton);
-    bool spindleDownState = digitalRead(spindleDownButton);
-    bool spindlePass = digitalRead(spindlePassButton);
-    bool spindleFail = digitalRead(spindleFailButton);
 
 
-    if (spindleDownState == HIGH) {                             // drives the spindle down
-      digitalWrite(spindleDirPin, HIGH);
-      for (int i = 0; i <= 400; i++) {
-        digitalWrite(spindleStepPin, HIGH);
-        delayMicroseconds(500);
-        digitalWrite(spindleStepPin, LOW);
-        delayMicroseconds(500);
-      }
-      upCount--;
-      Serial.println(upCount);
-    }
+ digitalWrite(spindleReverse,HIGH);
+ delay(400);
+ digitalWrite(spindleReverse,LOW);
+ delay(500);
 
-    if (spindleUpState == HIGH) {                              // drives the spindle up
-      digitalWrite(spindleDirPin, LOW);
-      for (int i = 0; i <= 400; i++) {
-        digitalWrite(spindleStepPin, HIGH);
-        delayMicroseconds(500);
-        digitalWrite(spindleStepPin, LOW);
-        delayMicroseconds(500);
-      }
-      upCount++;                                               // variable keeps check of how many times the spindle was winded/unwinded
-      Serial.println(upCount);
-    }
+ digitalWrite(spindle,LOW);
+ digitalWrite(catridge,LOW);
+ delay(2000);
 
-    if (spindleFail == HIGH) {                                 // operator presses the fail button
-      return false;
-    }
+  Serial3.print("t2.pco=63015");
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.print("t2.txt=\"Submerging - Please check for leaks\"");
+  Serial3.write(0xff);
+  Serial3.write(0xff);
+  Serial3.write(0xff);
 
-    if (upCount >= checkValue) {
-      if (spindlePass == HIGH) {                               // operator must check atleast 6 locations of unwinding before they can try pass the valve
-        return true;
-      }
-    }
-  }
-  */
 
-  digitalWrite(spindleDirPin, LOW);
-  for (int i = 0; i <= 3; i++) // 3 complete revolutions
-  {
-    for (int j = 0; j <= 400; j++)
-    {
-      digitalWrite(spindleStepPin, HIGH);
-      delayMicroseconds(500);
-      digitalWrite(spindleStepPin, LOW);
-      delayMicroseconds(500);
-    }
-  }
+ digitalWrite(submerge,HIGH);
+ delay(3000);
+ 
+
+ //ADD THE SUBMERGING STEPS HERE
+
 
   while (spindleLeakState == false)
   {
-    if (Serial.available())
+    if (Serial3.available())
     {
       delay(30);
-      char leakCheck = (Serial.read());
+      char leakCheck = (Serial3.read());
 
       if (leakCheck == 'P')
       {
         Serial.println("Operator passed the valve in submerge test");
+        digitalWrite(submerge,LOW);
+        delay(3000);
+         //digitalWrite(spindle,HIGH);
+          digitalWrite(catridge,HIGH);
+          delay(1000);
+
         return true;
+        
       }
 
       if (leakCheck == 'F')
       {
         Serial.println("Operator failed the valve in submerge test");
+        digitalWrite(submerge,LOW);
+        delay(2000);
         return false;
       }
     }

@@ -1,11 +1,18 @@
 #include <Arduino.h>
+#include <FastLED.h>
 #include "functions.h"
 
 // initializing all of the variables
 
+#define NUM_LEDS 120
+#define LED_PIN 22
+
+CRGB leds[NUM_LEDS];
+
 // button variables
-int springCylinder = 51;
-int spindleCylinder = 53;
+int springCylinder = 38;
+int spindleCylinder = 4;
+int submergeCylinder = 40;
 int cylinderButton = 45;
 int spindleButton = 43;
 int startButton = 41;
@@ -14,17 +21,17 @@ int cylinderButtonState = 0;
 int spindleButtonState = 0;
 int startButtonState = 0;
 
+int airMotorForward = 36;
+int airMotorReverse = 34;
+
 // checking to see if both drivers are active
 bool springState = false;
 bool spindleState = false;
 
-// motor pins
-int big_stepPin = 4;
-int big_dirPin = 2;
-int big_enPin = 3;
-int small_stepPin = 6;
-int small_dirPin = 7;
-int small_enPin = 8;
+// motor pins  ---> check these
+int big_stepPin = 5;
+int big_dirPin = 6;
+int big_enPin = 7;
 
 // output pressure setpoint ----> need to re-evaluate once HMI display is in action
 int setpoint = 500;
@@ -34,14 +41,9 @@ float pressure = 0;
 float postPressure = 0;
 float error = 0;
 
-// LED functionality
-int TESTING = 9; // Testing phase LED
-int FAIL = 11;   // Red LED
-int PASS = 10;   // Green LED
-
 // input and output solenoids
-int inputRelay = 49;
-int outputRelay = 47;
+int inputRelay = 2;
+int outputRelay = 3;
 
 bool spindleCheck = false;
 bool springCheck = false;
@@ -71,7 +73,7 @@ int shutOffLimit = 40;
 int preShutOff = 50;
 int decayLimit = 50;
 int holdingLimit = 20;
-int creepLimit = 15;
+int creepLimit = 20; // 15
 int pulse = 3;
 int pulseLimit = 20;
 int checkpoints = 6;
@@ -79,18 +81,40 @@ bool pressureSettingCheck = false;
 bool driverDown = false;
 bool driverUp = false;
 
-
 // the reset function resets all of the variables used in the loop function after a pass or fail test to carry out testing for the next valve
 void reset(bool status)
 {
   if (status == true)
   {
     Serial.println("Testing Complete ---> Valve passed all tests");
-    digitalWrite(FAIL, LOW);
-    digitalWrite(PASS, HIGH);
-    digitalWrite(TESTING, LOW);
-    digitalWrite(springCylinder, HIGH);
-    digitalWrite(spindleCylinder, HIGH);
+
+    Serial3.print("t2.pco=12000");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.print("t2.txt=\"Valve passed all tests \"");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+
+    Serial3.print("t1.pco=0");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.print("t1.txt=\"\"");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+
+    for (int i = 0; i < NUM_LEDS - 60; i++)
+    {
+      leds[i] = CRGB::Green;
+    }
+
+    FastLED.show();
+
+    digitalWrite(springCylinder, LOW);
+    digitalWrite(spindleCylinder, LOW);
     digitalWrite(inputRelay, LOW);
     digitalWrite(outputRelay, HIGH);
     delay(600);
@@ -103,26 +127,41 @@ void reset(bool status)
   }
   else if (status == false)
   {
-    digitalWrite(FAIL, HIGH);
-    digitalWrite(PASS, LOW);
-    digitalWrite(TESTING, LOW);
-    digitalWrite(springCylinder, HIGH);
-    digitalWrite(spindleCylinder, HIGH);
+
+    for (int i = 0; i < NUM_LEDS - 60; i++)
+    {
+      leds[i] = CRGB::Red;
+    }
+
+    FastLED.show();
+
+    digitalWrite(springCylinder, LOW);
+    digitalWrite(spindleCylinder, LOW);
     digitalWrite(inputRelay, LOW);
     digitalWrite(outputRelay, HIGH);
-    delay(600);
+    delay(1000);
     digitalWrite(outputRelay, LOW);
     pressureSetCheck = false;
     spindleCheck = false;
     springCheck = false;
     startProgram = false;
     driverCheck = false;
+
+    Serial3.print("t1.pco=0");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.print("t1.txt=\"\"");
+    Serial3.write(0xff);
+    Serial3.write(0xff);
+    Serial3.write(0xff);
   }
 }
 
 void setup()
 {
   Serial.begin(9600);
+  Serial3.begin(9600);
 
   pinMode(springCylinder, OUTPUT);
   pinMode(spindleCylinder, OUTPUT);
@@ -130,35 +169,39 @@ void setup()
   pinMode(spindleButton, INPUT);
   pinMode(startButton, INPUT);
   pinMode(spindleLeakButton, INPUT);
-  // pinMode(spindleUpButton, INPUT);
-  // pinMode(spindleDownButton, INPUT);
+  pinMode(airMotorForward, OUTPUT);
+  pinMode(airMotorReverse, OUTPUT);
+  pinMode(submergeCylinder, OUTPUT);
 
   pinMode(big_stepPin, OUTPUT);
   pinMode(big_dirPin, OUTPUT);
   pinMode(big_enPin, LOW);
 
-  pinMode(small_stepPin, OUTPUT);
-  pinMode(small_dirPin, OUTPUT);
-  pinMode(small_enPin, LOW);
-
-  pinMode(TESTING, OUTPUT);
-  pinMode(PASS, OUTPUT);
-  pinMode(FAIL, OUTPUT);
-
   pinMode(inputRelay, OUTPUT);
   pinMode(outputRelay, OUTPUT);
 
-  digitalWrite(springCylinder, HIGH);
-  digitalWrite(spindleCylinder, HIGH);
-}
+  digitalWrite(springCylinder, LOW);
+  digitalWrite(spindleCylinder, LOW);
 
+  digitalWrite(inputRelay, LOW);
+  digitalWrite(outputRelay, LOW);
+
+  FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.setBrightness(225);
+  for (int i = 0; i < NUM_LEDS - 60; i++)
+  {
+    leds[i] = CRGB::White;
+  }
+
+  FastLED.show();
+}
 void loop()
 {
 
-  if (Serial.available() && modeState == false)
+  if (Serial3.available() && modeState == false)
   {
     delay(30);
-    char modeSelection = (Serial.read());
+    char modeSelection = (Serial3.read());
 
     if (modeSelection == 'n')
     {
@@ -167,14 +210,14 @@ void loop()
       modeState = true;
     }
 
-    if (modeSelection == 't')
+    else if (modeSelection == 't')
     {
       Serial.println("In manual test mode");
       modeChoice = 2;
       modeState = true;
     }
 
-    if (modeSelection == 'c')
+    else if (modeSelection == 'c')
     {
       Serial.println("In calibration mode");
       modeChoice = 3;
@@ -185,92 +228,102 @@ void loop()
   if (modeChoice == 1)
   {
 
-    if (Serial.available())
+    if (Serial3.available())
     {
-      char driverMode = (Serial.read());
+      char driverMode = (Serial3.read());
 
       if (driverMode == 'T')
       {
-        Serial.print("t2.pco=65535");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.print("t2.txt=\"Setpoint of 350 kPa selected\"");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.print("t0.pco=65535");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.print("t0.txt=\"350kPa\"");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
+        Serial3.print("t2.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("t2.txt=\"Setpoint of 350 kPa selected\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("t0.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("t0.txt=\"350kPa\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
         setpoint = 350;
         pressureSettingCheck = true;
       }
 
       if (driverMode == 'I')
       {
-        Serial.print("t2.pco=65535");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.print("t2.txt=\"Setpoint of 500 kPa selected\"");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.print("t0.pco=65535");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.print("t0.txt=\"500kPa\"");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
+        Serial3.print("t2.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("t2.txt=\"Setpoint of 500 kPa selected\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("t0.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("t0.txt=\"500kPa\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
         setpoint = 500;
         pressureSettingCheck = true;
       }
 
-      if (driverMode == 'u')
-      {
-        Serial.print("t2.pco=65535");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.print("t2.txt=\"Drivers raised\"");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
-        driverUp = true;
-        driverCheck = false;
-      }
-
       if (driverMode == 'd')
       {
-        Serial.print("t2.pco=65535");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.print("t2.txt=\"Drivers lowered\"");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
-        driverDown = true;
+        Serial3.print("t2.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("t2.txt=\"Drivers lowered\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        Serial3.print("t4.pco=0");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("t4.txt=\"\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        driverUp = true;
         driverCheck = true;
+      }
+
+      if (driverMode == 'u')
+      {
+        Serial3.print("t2.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("t2.txt=\"Drivers raised\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        driverDown = true;
+        driverCheck = false;
       }
 
       if (driverMode == 's' && driverCheck == true && pressureSettingCheck == true)
       {
-        Serial.print("t2.pco=65535");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.print("t2.txt=\"Test procedure begun\"");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
+        Serial3.print("t2.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("t2.txt=\"Test procedure begun\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
         startProgram = true;
       }
 
@@ -287,7 +340,7 @@ void loop()
       springState = false;
       spindleState = false;
 
-      digitalWrite(springCylinder, springState);
+      // digitalWrite(springCylinder, springState);
       digitalWrite(spindleCylinder, spindleState);
 
       delay(200);
@@ -300,7 +353,7 @@ void loop()
       springState = true;
       spindleState = true;
 
-      digitalWrite(springCylinder, springState);
+      // digitalWrite(springCylinder, springState);
       digitalWrite(spindleCylinder, spindleState);
 
       driverUp = false;
@@ -309,35 +362,19 @@ void loop()
     if (driverCheck == true && startProgram == true)
     {
       Serial.println("Entered main program function");
-      digitalWrite(PASS, LOW);
-      digitalWrite(FAIL, LOW);
+
       digitalWrite(inputRelay, HIGH);
       digitalWrite(outputRelay, HIGH);
       delay(500);
 
-      digitalWrite(TESTING, HIGH);
       pressureHold = pressureDecay(inputRelay, outputRelay, decayLimit); // secondary check to capture any leaks in the system
-      digitalWrite(TESTING, LOW);
 
-      digitalWrite(TESTING, HIGH);
-      shutOffCheck = shutOffFunction(small_dirPin, small_stepPin, inputRelay, outputRelay, shutOffLimit, preShutOff); // Tests shut off functionality
-      digitalWrite(TESTING, LOW);
+      shutOffCheck = shutOffFunction(airMotorForward, airMotorReverse, inputRelay, outputRelay, shutOffLimit, preShutOff); // Tests shut off functionality
 
       if (shutOffCheck == true)
       {
-        digitalWrite(PASS, HIGH);
-      }
-      else if (shutOffCheck == false)
-      {
-        digitalWrite(fail, HIGH);
-      }
+        spindleLeak = spindleReversal(airMotorForward, airMotorReverse, spindleCylinder, springCylinder, inputRelay, outputRelay, submergeCylinder); // operators to test for leaks
 
-      if (shutOffCheck == true)
-      {
-
-        digitalWrite(TESTING, HIGH);
-        spindleLeak = spindleReversal(small_dirPin, small_stepPin, inputRelay, outputRelay, spindleButton, cylinderButton, spindleLeakButton, startButton, checkpoints); // operators to test for leaks
-        digitalWrite(TESTING, LOW);
         digitalWrite(inputRelay, LOW);
         digitalWrite(outputRelay, HIGH);
 
@@ -351,14 +388,14 @@ void loop()
           Serial.print("Current outlet pressure : ");
           Serial.println(postPressure);
 
-          Serial.print("t2.pco=63015");
-          Serial.write(0xff);
-          Serial.write(0xff);
-          Serial.write(0xff);
-          Serial.print("t2.txt=\"Testing catridge\"");
-          Serial.write(0xff);
-          Serial.write(0xff);
-          Serial.write(0xff);
+          Serial3.print("t2.pco=63015");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.print("t2.txt=\"Testing catridge\"");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
 
           // This test is to ensure that the spring housing is not faulty by not allowing the mains pressure to go through it with no restriction
           if (abs(pressure - postPressure) > inOutDiff)
@@ -378,14 +415,14 @@ void loop()
           { // only if all the previous tests are passed, the output pressure is adjusted to the setpoint
             Serial.println("Successfully holding pressure");
 
-            Serial.print("t2.pco=63015");
-            Serial.write(0xff);
-            Serial.write(0xff);
-            Serial.write(0xff);
-            Serial.print("t2.txt=\"Pressure setting in action\"");
-            Serial.write(0xff);
-            Serial.write(0xff);
-            Serial.write(0xff);
+            Serial3.print("t2.pco=63015");
+            Serial3.write(0xff);
+            Serial3.write(0xff);
+            Serial3.write(0xff);
+            Serial3.print("t2.txt=\"Pressure setting in action\"");
+            Serial3.write(0xff);
+            Serial3.write(0xff);
+            Serial3.write(0xff);
 
             while (pressureSetCheck == false)
             {
@@ -418,14 +455,14 @@ void loop()
             digitalWrite(outputRelay, LOW);
             delay(250);
 
-            Serial.print("t2.pco=63015");
-            Serial.write(0xff);
-            Serial.write(0xff);
-            Serial.write(0xff);
-            Serial.print("t2.txt=\"Pulsing test\"");
-            Serial.write(0xff);
-            Serial.write(0xff);
-            Serial.write(0xff);
+            Serial3.print("t2.pco=63015");
+            Serial3.write(0xff);
+            Serial3.write(0xff);
+            Serial3.write(0xff);
+            Serial3.print("t2.txt=\"Pulsing test\"");
+            Serial3.write(0xff);
+            Serial3.write(0xff);
+            Serial3.write(0xff);
 
             pressure = pressureSensor();
             Serial.print("Pressure test for the pulsing : ");
@@ -437,114 +474,461 @@ void loop()
             delay(250);
             pressure = pressureSensor();
             Serial.print("Checking for pressure creep after setting the pressure. Pressure set to ");
-            Serial.println(pressure);
-            digitalWrite(TESTING, HIGH);
             springPressureCheck = springPressure(pressure, creepLimit); // check for pressure creep on the output after pressure setting
-            digitalWrite(TESTING, LOW);
-
-            if (springPressureCheck == false)
-            {
-              digitalWrite(FAIL, HIGH);
-            }
-            else
-            {
-              digitalWrite(PASS, HIGH);
-            }
 
             if (secondPulseCheck == true && springPressureCheck == true)
             {
               Serial.print("Pressure holding at setpoint of ");
               Serial.println(setpoint);
 
-              Serial.print("t4.pco=12000");
-              Serial.write(0xff);
-              Serial.write(0xff);
-              Serial.write(0xff);
-              Serial.print("t4.txt=\"PASS\"");
-              Serial.write(0xff);
-              Serial.write(0xff);
-              Serial.write(0xff);
+              Serial3.print("t4.pco=12000");
+              Serial3.write(0xff);
+              Serial3.write(0xff);
+              Serial3.write(0xff);
+              Serial3.print("t4.txt=\"PASS\"");
+              Serial3.write(0xff);
+              Serial3.write(0xff);
+              Serial3.write(0xff);
 
               reset(pass); // All tests are complete and the valve is good to go
             }
             else
             {
               Serial.println("Pulsing failed or pressure not holding to the setpoint");
-              Serial.print("t4.pco=63488");
-              Serial.write(0xff);
-              Serial.write(0xff);
-              Serial.write(0xff);
-              Serial.print("t4.txt=\"FAIL\"");
-              Serial.write(0xff);
-              Serial.write(0xff);
-              Serial.write(0xff);
+
+              Serial3.print("t2.pco=63488");
+              Serial3.write(0xff);
+              Serial3.write(0xff);
+              Serial3.write(0xff);
+              Serial3.print("t2.txt=\"Pulse/Pressure setting failed\"");
+              Serial3.write(0xff);
+              Serial3.write(0xff);
+              Serial3.write(0xff);
+
+              Serial3.print("t4.pco=63488");
+              Serial3.write(0xff);
+              Serial3.write(0xff);
+              Serial3.write(0xff);
+              Serial3.print("t4.txt=\"FAIL\"");
+              Serial3.write(0xff);
+              Serial3.write(0xff);
+              Serial3.write(0xff);
               reset(fail); // Valve failed pulsing test
             }
           }
           else
           {
             Serial.println("Spring issue, pressure on the output not valid");
-            Serial.print("t4.pco=63488");
-            Serial.write(0xff);
-            Serial.write(0xff);
-            Serial.write(0xff);
-            Serial.print("t4.txt=\"FAIL\"");
-            Serial.write(0xff);
-            Serial.write(0xff);
-            Serial.write(0xff);
+
+            Serial3.print("t2.pco=63488");
+            Serial3.write(0xff);
+            Serial3.write(0xff);
+            Serial3.write(0xff);
+            Serial3.print("t2.txt=\"Catridge not functioning correctly\"");
+            Serial3.write(0xff);
+            Serial3.write(0xff);
+            Serial3.write(0xff);
+
+            Serial3.print("t4.pco=63488");
+            Serial3.write(0xff);
+            Serial3.write(0xff);
+            Serial3.write(0xff);
+            Serial3.print("t4.txt=\"FAIL\"");
+            Serial3.write(0xff);
+            Serial3.write(0xff);
+            Serial3.write(0xff);
             reset(fail); // Valve failed due to faulty spring housing
           }
         }
         else
         {
           Serial.println("Leak from the spindle based on operators observation");
-          Serial.print("t4.pco=63488");
-          Serial.write(0xff);
-          Serial.write(0xff);
-          Serial.write(0xff);
-          Serial.print("t4.txt=\"FAIL\"");
-          Serial.write(0xff);
-          Serial.write(0xff);
-          Serial.write(0xff);
+
+          Serial3.print("t2.pco=63488");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.print("t2.txt=\"Operator fail/Leak \"");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+
+          Serial3.print("t4.pco=63488");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.print("t4.txt=\"FAIL\"");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
           reset(fail); // Valve failed due to leak observed by the operator
         }
       }
       else
       {
-        Serial.print("t4.pco=63488");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.print("t4.txt=\"FAIL\"");
-        Serial.write(0xff);
-        Serial.write(0xff);
-        Serial.write(0xff);
-        // Serial.println("Shut off failed");
+        Serial3.print("t2.pco=63488");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("t2.txt=\"Shut off failure\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        Serial3.print("t4.pco=63488");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("t4.txt=\"FAIL\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
         reset(fail); // Shut off function failed
       }
     }
   }
   else if (modeChoice == 2)
   {
-    if (Serial.available())
+    if (Serial3.available())
     {
-      char driverMode = (Serial.read());
+      char buttonSelect = (Serial3.read());
 
-      if (driverMode == 'b')
+      if (buttonSelect == 'b')
       {
         Serial.println("Going back to selection mode");
         modeChoice = 0;
         modeState = false;
       }
+
+      if (buttonSelect == 'a')
+      {
+        Serial.println("Drivers raised");
+        Serial3.print("status.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("status.txt=\"Drivers raised\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        digitalWrite(spindleCylinder, LOW);
+        digitalWrite(springCylinder, LOW);
+      }
+
+      if (buttonSelect == 'c')
+      {
+        Serial.println("Drivers lowered");
+        Serial3.print("status.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("status.txt=\"Drivers lowered\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        digitalWrite(spindleCylinder, HIGH);
+        digitalWrite(springCylinder, HIGH);
+      }
+
+      if (buttonSelect == 'd')
+      {
+        Serial.println("Submerge raise");
+        Serial3.print("status.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("status.txt=\"Valve mount ascending\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        digitalWrite(submergeCylinder, LOW);
+        digitalWrite(inputRelay, LOW);
+      }
+
+      if (buttonSelect == 'e')
+      {
+        Serial.println("Submerge raise");
+        Serial3.print("status.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("status.txt=\"Valve mount descending\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        digitalWrite(submergeCylinder, HIGH);
+        digitalWrite(spindleCylinder, LOW);
+        digitalWrite(springCylinder, LOW);
+        digitalWrite(inputRelay, HIGH);
+      }
+
+      if (buttonSelect == 'f')
+      {
+        Serial.println("spindle open");
+        Serial3.print("status.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("status.txt=\"Opening spindle\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        digitalWrite(airMotorReverse, HIGH);
+        delay(150);
+        digitalWrite(airMotorReverse, LOW);
+      }
+
+      if (buttonSelect == 'g')
+      {
+        Serial.println("spindle closing");
+        Serial3.print("status.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("status.txt=\"Closing spindle\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        digitalWrite(airMotorForward, HIGH);
+        delay(150);
+        digitalWrite(airMotorForward, LOW);
+      }
+
+      if (buttonSelect == 'h')
+      {
+        Serial.println("Input pressure on");
+        Serial3.print("status.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("status.txt=\"Incoming pressure started\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        digitalWrite(inputRelay, HIGH);
+      }
+
+      if (buttonSelect == 'i')
+      {
+        Serial.println("Input pressure off");
+        Serial3.print("status.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("status.txt=\"Incoming pressure stopped\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        digitalWrite(inputRelay, LOW);
+        digitalWrite(outputRelay, HIGH);
+        delay(1000);
+        digitalWrite(outputRelay, LOW);
+      }
+
+      if (buttonSelect == 'j')
+      {
+        Serial.println("Ending test program");
+        Serial3.print("status.pco=65535");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("status.txt=\"Ending test program\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        digitalWrite(inputRelay, LOW);
+        digitalWrite(outputRelay, HIGH);
+        delay(1000);
+        digitalWrite(outputRelay, LOW);
+        digitalWrite(spindleCylinder, LOW);
+        digitalWrite(springCylinder, LOW);
+        digitalWrite(submergeCylinder, LOW);
+      }
+
+      if (buttonSelect == 'k')
+      {
+        Serial.println("leak test");
+        Serial3.print("status.pco=63015");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("status.txt=\"Leak test\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        bool pressureLeak = pressureDecay(inputRelay, outputRelay, decayLimit);
+
+        if (pressureLeak == false)
+        {
+          Serial3.print("status.pco=63488");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.print("status.txt=\"Leak detected\"");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+        }
+        else
+        {
+          Serial3.print("status.pco=12000");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.print("status.txt=\"Leak test passed\"");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+        }
+      }
+
+      if (buttonSelect == 's')
+      {
+        Serial.println("leak test");
+        Serial3.print("status.pco=63015");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("status.txt=\"Shut off test\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        bool shutOffLeak = shutOffFunction(airMotorForward, airMotorReverse, inputRelay, outputRelay, shutOffLimit, preShutOff);
+
+        if (shutOffLeak == false)
+        {
+          Serial3.print("status.pco=63488");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.print("status.txt=\"Shut off failed\"");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+        }
+        else
+        {
+          Serial3.print("status.pco=12000");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.print("status.txt=\"Shut off achieved\"");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+        }
+      }
+
+      if (buttonSelect == 'p')
+      {
+        Serial.println("pulse test");
+        Serial3.print("status.pco=63015");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("status.txt=\"Pulse test\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        digitalWrite(inputRelay, HIGH);
+        digitalWrite(outputRelay, LOW);
+        delay(250);
+
+        float currentPressure = pressureSensor();
+        Serial.print("Pressure test for the pulsing : ");
+        Serial.println(currentPressure);
+        bool pulseCheck = pulsingCheck(currentPressure, inputRelay, outputRelay, pulse, pulseLimit); // pulsing test to check if pressure sticks to the setpoint
+
+        digitalWrite(inputRelay, HIGH);
+        digitalWrite(outputRelay, LOW);
+
+        if (pulseCheck == false)
+        {
+          Serial3.print("status.pco=63488");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.print("status.txt=\"Pulse test failed\"");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+        }
+        else
+        {
+          Serial3.print("status.pco=12000");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.print("status.txt=\"Pulse test passed\"");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+        }
+      }
+
+      if (buttonSelect == 'm')
+      {
+        Serial.println("pressure creep test");
+        Serial3.print("status.pco=63015");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.print("status.txt=\"Pressure creep test\"");
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+        Serial3.write(0xff);
+
+        digitalWrite(inputRelay, HIGH);
+        digitalWrite(outputRelay, LOW);
+        delay(250);
+
+        float setPressure = pressureSensor();
+        bool creepTest = springPressure(setPressure, creepLimit);
+
+        if (creepTest == false)
+        {
+          Serial3.print("status.pco=63488");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.print("status.txt=\"Pressure creeping\"");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+        }
+        else
+        {
+          Serial3.print("status.pco=12000");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.print("status.txt=\"Pressure is holding at setpoint\"");
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+          Serial3.write(0xff);
+        }
+      }
     }
   }
   else if (modeChoice == 3)
   {
-    if (Serial.available())
+    if (Serial3.available())
     {
-      char driverMode = (Serial.read());
+      char buttonSelect = (Serial3.read());
 
-      if (driverMode == 'b')
+      if (buttonSelect == 'b')
       {
         Serial.println("Going back to selection mode");
         modeChoice = 0;
